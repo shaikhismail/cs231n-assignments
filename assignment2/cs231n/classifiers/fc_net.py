@@ -54,6 +54,7 @@ class TwoLayerNet(object):
     ############################################################################
 
 
+
   def loss(self, X, y=None):
     """
     Compute loss and gradient for a minibatch of data.
@@ -196,9 +197,9 @@ class FullyConnectedNet(object):
         self.params['b'+str(i+1)] = np.zeros(size_layer[i+1])
     
     if self.use_batchnorm:
-        for i in range(num_layers):
-            self.params['gamma'+str(i+1)] = 1
-            self.params['beta'+str(i+1)] = 0
+        for i in range(self.num_layers-1):
+            self.params['gamma'+str(i+1)] = np.ones(size_layer[i+1])
+            self.params['beta'+str(i+1)] = np.zeros(size_layer[i+1])
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -224,6 +225,9 @@ class FullyConnectedNet(object):
     # Cast all parameters to the correct datatype
     for k, v in self.params.iteritems():
       self.params[k] = v.astype(dtype)
+
+    return None
+
 
 
   def loss(self, X, y=None):
@@ -260,15 +264,15 @@ class FullyConnectedNet(object):
     layer_cache = {}
     reg_loss = 0.0
     
-    for i in range(self.num_layers):
+    for i in range(self.num_layers-1):
         W_l = self.params['W'+str(i+1)]
         b_l = self.params['b'+str(i+1)]
         out_af, cache_af = affine_forward(input_to_layer, W_l, b_l)
         layer_cache['af'+str(i+1)] = cache_af
 
         if self.use_batchnorm:
-            out_bn, cache_bn = batch_norm_forward(out_af, self.params['gamma'+str(i+1)], 
-                                                  self.params['beta'+str(i)], self.bn_params[i])
+            out_bn, cache_bn = batchnorm_forward(out_af, self.params['gamma'+str(i+1)], 
+                                                  self.params['beta'+str(i+1)], self.bn_params[i])
             layer_cache['bn'+str(i+1)] = cache_bn
         else:
             out_bn = out_af
@@ -284,6 +288,17 @@ class FullyConnectedNet(object):
             
         input_to_layer = out_dropout
         
+        
+    #Doing  separately for last layer because we don't apply BN to last layer
+    i = self.num_layers-1
+    W_l = self.params['W'+str(i+1)]
+    b_l = self.params['b'+str(i+1)]
+    out_af, cache_af = affine_forward(input_to_layer, W_l, b_l)
+    layer_cache['af'+str(i+1)] = cache_af    
+    out_bn = out_af
+    out_relu, cache_relu = relu_forward(out_bn)
+    layer_cache['relu'+str(i+1)] = cache_relu
+    out_dropout = out_relu
     
     scores = out_dropout
     
@@ -313,11 +328,37 @@ class FullyConnectedNet(object):
         
     reg_loss = 0.0
     dout_dropout = dout
-    for i in range(self.num_layers-1, -1, -1):
+    
+    #backward pass
+    #separately for last layer -- excluding batchnorm and dropout
+    i = self.num_layers-1
+    cache_af = layer_cache['af'+str(i+1)]
+    cache_relu = layer_cache['relu'+str(i+1)]
+        
+    dout_relu = dout_dropout
+    dout_bn = relu_backward(dout_relu, cache_relu)
+    dout_af = dout_bn
+    
+    dx, dw, db = affine_backward(dout_af, cache_af)
+    dout_dropout = dx
+    
+    W_l = self.params['W'+str(i+1)]
+    # add gradient due to regularization
+    dw += (self.reg * W_l)
+    grads['W'+str(i+1)] = dw
+    grads['b'+str(i+1)] = db
+        
+    #you can commpute reg_loss while doing backward pass
+    reg_loss += np.sum(W_l * W_l)
+        
+        
+    #backward pass for other l-1 layers -- including batchnorm
+    for i in range(self.num_layers-2, -1, -1):
         cache_af = layer_cache['af'+str(i+1)]
         cache_relu = layer_cache['relu'+str(i+1)]
         
         if self.use_dropout:
+            print('using droput')
             cache_dropout = layer_cache['dropout'+str(i+1)]
             dout_relu = dropout_backward(dout_dropout, cache_dropout)
         else:
@@ -328,6 +369,8 @@ class FullyConnectedNet(object):
         if self.use_batchnorm:
             cache_bn = layer_cache['bn'+str(i+1)]
             dout_af, dgamma, dbeta = batchnorm_backward(dout_bn, cache_bn)
+            grads['beta'+str(i+1)] = dbeta
+            grads['gamma'+str(i+1)] = dgamma
         else:
             dout_af = dout_bn
         

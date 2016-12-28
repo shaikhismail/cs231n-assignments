@@ -253,7 +253,7 @@ class Solver(object):
         self.val_acc_history.append(val_acc)
 
         #if self.verbose:
-        if last_it and self.verbose:
+        if self.verbose:
           print '(Epoch %d / %d) train acc: %f; val_acc: %f' % (
                  self.epoch, self.num_epochs, train_acc, val_acc)
 
