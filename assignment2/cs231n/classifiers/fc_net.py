@@ -352,13 +352,12 @@ class FullyConnectedNet(object):
     reg_loss += np.sum(W_l * W_l)
         
         
-    #backward pass for other l-1 layers -- including batchnorm
+    #backward pass for other l-1 layers -- including batchnorm and dropout
     for i in range(self.num_layers-2, -1, -1):
         cache_af = layer_cache['af'+str(i+1)]
         cache_relu = layer_cache['relu'+str(i+1)]
         
         if self.use_dropout:
-            print('using droput')
             cache_dropout = layer_cache['dropout'+str(i+1)]
             dout_relu = dropout_backward(dout_dropout, cache_dropout)
         else:
